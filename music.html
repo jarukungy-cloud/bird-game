@@ -1,0 +1,595 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Retro Tape</title>
+<meta name="theme-color" content="#1b1d22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root { --ink: #1f2420; --label: #3c4a6b; --accent: #e8702a; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: #1b1d22; font-family: system-ui, -apple-system, "Segoe UI", "Leelawadee UI", "PingFang SC", "Microsoft YaHei", Tahoma, sans-serif; }
+  body { display: flex; justify-content: center; min-height: 100vh; min-height: 100dvh; }
+  .page {
+    width: min(100vw, 520px); min-height: 100%;
+    background: linear-gradient(170deg, #eee8d6, #d2c7a8);
+    padding: max(12px, env(safe-area-inset-top)) 14px max(24px, env(safe-area-inset-bottom));
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; min-width: 0; }
+  .page > * { min-width: 0; }
+  .back { font-size: 13px; font-weight: 700; color: var(--label); text-decoration: none; border: 1.5px solid currentColor; border-radius: 999px; padding: 5px 12px; }
+  .usage { font-size: 11.5px; color: var(--label); }
+
+  /* ---- the player body ---- */
+  .dev {
+    position: sticky; top: max(6px, env(safe-area-inset-top)); z-index: 5;
+    background: linear-gradient(160deg, #d9dde3, #a9b1bd);
+    border-radius: 22px; padding: 14px 14px 16px;
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.7), inset 0 -3px 0 rgba(0,0,0,.15), 0 8px 20px rgba(0,0,0,.25);
+    user-select: none; -webkit-user-select: none;
+  }
+  @media (max-height: 760px) { .dev { position: static; } }
+  /* unfolded foldables / tablets: player on the left, songs on the right */
+  @media (min-width: 760px) {
+    .page { width: min(100vw, 1000px); display: grid; grid-template-columns: minmax(340px, 420px) minmax(0, 1fr); grid-template-rows: auto auto auto auto auto 1fr; column-gap: 22px; align-content: start; }
+    .top { grid-column: 1 / -1; }
+    .dev { grid-column: 1; grid-row: 2 / -1; align-self: start; position: sticky; top: 12px; }
+    .albums { flex-wrap: wrap; overflow: visible; }
+    .albums, .bar, .list, .note { grid-column: 2; }
+    .albums { padding-top: 0; }
+  }
+  .brand { display: flex; justify-content: space-between; align-items: baseline; margin: 0 4px 8px; }
+  .brand b { font-size: 15px; letter-spacing: .22em; color: #2b3240; font-style: italic; }
+  .brand b i { color: var(--accent); font-style: italic; }
+  .brand span { font-size: 10px; letter-spacing: .14em; color: #4b5566; font-weight: 700; }
+
+  .lcd {
+    background: radial-gradient(ellipse at 30% 20%, #c8d6a8, #a9bb84 75%);
+    border-radius: 6px; padding: 7px 10px; margin-bottom: 10px;
+    box-shadow: inset 0 2px 5px rgba(0,0,0,.35); color: var(--ink);
+    font-family: "Courier New", monospace; font-weight: 800;
+  }
+  .marquee { overflow: hidden; white-space: nowrap; font-size: 15px; height: 1.3em; position: relative; }
+  .marquee span { display: inline-block; padding-left: 100%; animation: scroll 14s linear infinite; font-family: system-ui, "Leelawadee UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+  .marquee.static span { padding-left: 0; animation: none; }
+  @keyframes scroll { to { transform: translateX(-100%); } }
+  .lcdrow { display: flex; justify-content: space-between; font-size: 12px; margin-top: 3px; opacity: .85; }
+
+  .cassette { position: relative; background: #2a2d33; border-radius: 12px; padding: 8px; box-shadow: inset 0 0 0 2px #15171a; }
+  .cassette svg { display: block; width: 100%; height: auto; }
+  .reel { transform-box: fill-box; transform-origin: center; }
+  .playing .reel { animation: spin 1.6s linear infinite; }
+  @keyframes spin { to { transform: rotate(-360deg); } }
+
+  .seek { width: 100%; margin: 12px 0 4px; accent-color: var(--accent); }
+  .btns { display: flex; justify-content: center; gap: 10px; margin-top: 6px; }
+  .k {
+    width: 58px; height: 46px; border: 0; border-radius: 10px; cursor: pointer;
+    background: linear-gradient(#f4f5f7, #c9ced6); color: #2b3240; font-size: 18px; font-weight: 900;
+    box-shadow: 0 4px 0 #7d8592, 0 6px 8px rgba(0,0,0,.2);
+  }
+  .k.play { width: 72px; background: linear-gradient(#ff9a5a, var(--accent)); color: #fff; box-shadow: 0 4px 0 #9c4512, 0 6px 8px rgba(0,0,0,.2); }
+  .k:active { transform: translateY(3px); box-shadow: 0 1px 0 #7d8592; }
+  .modes { display: flex; justify-content: center; gap: 8px; margin-top: 12px; }
+  .m { height: 30px; padding: 0 12px; border: 0; border-radius: 999px; background: rgba(43,50,64,.18); color: #2b3240; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
+  .m.on { background: #2b3240; color: #fff; }
+
+  /* ---- albums + tracks ---- */
+  .albums { display: flex; gap: 8px; overflow-x: auto; padding: 16px 2px 8px; scrollbar-width: none; }
+  .albums::-webkit-scrollbar { display: none; }
+  .chip { flex: none; height: 36px; padding: 0 14px; border: 0; border-radius: 999px; background: #f7f3e8; color: #333; font: inherit; font-size: 14px; font-weight: 700; box-shadow: 0 2px 0 #c9bf9f; cursor: pointer; white-space: nowrap; }
+  .chip.on { background: #2b3240; color: #fff; box-shadow: 0 2px 0 #11151c; }
+  .chip.add { background: transparent; box-shadow: inset 0 0 0 1.5px #9f957a; color: var(--label); }
+  .bar { display: flex; gap: 8px; align-items: center; margin: 4px 2px 10px; }
+  .bar .title { flex: 1; font-weight: 800; color: #222; font-size: 16px; }
+  .bar .title small { font-weight: 600; color: #666; font-size: 12px; margin-left: 6px; }
+  .tool { height: 34px; padding: 0 12px; border: 0; border-radius: 999px; background: #5b6f9c; color: #fff; font: inherit; font-size: 12.5px; font-weight: 800; cursor: pointer; box-shadow: 0 3px 0 #33415f; }
+  .tool.add { background: #2f8f5b; box-shadow: 0 3px 0 #1c5a39; }
+  label.tool { display: inline-flex; align-items: center; }
+  input[type=file] { display: none; }
+
+  .list { display: grid; gap: 6px; }
+  .tr { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border-radius: 12px; background: #f7f3e8; cursor: pointer; }
+  .tr.cur { background: #fff1e4; box-shadow: inset 0 0 0 2px var(--accent); }
+  .tr .n { width: 24px; text-align: center; font-family: "Courier New", monospace; font-weight: 800; color: #888; font-size: 13px; }
+  .tr.cur .n { color: var(--accent); }
+  .tr .t { flex: 1; min-width: 0; }
+  .tr .t b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; font-size: 14.5px; line-height: 1.35; color: #222; }
+  .tr .t span { font-size: 12px; color: #777; }
+  .more { width: 34px; height: 34px; border: 0; border-radius: 50%; background: transparent; font-size: 18px; color: #666; cursor: pointer; }
+  .empty { text-align: center; color: var(--label); font-size: 14px; line-height: 1.6; padding: 26px 10px; background: rgba(255,255,255,.35); border-radius: 14px; }
+  .note { font-size: 12px; color: var(--label); text-align: center; margin-top: 16px; line-height: 1.5; }
+
+  /* ---- bottom sheet ---- */
+  .sheet { position: fixed; inset: 0; z-index: 20; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.45); }
+  .sheet.show { display: flex; }
+  .sheet .box { width: min(100vw, 520px); background: #f7f3e8; border-radius: 20px 20px 0 0; padding: 16px 16px max(18px, env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  .sheet h3 { margin: 0 0 4px; font-size: 15px; color: #222; word-break: break-word; }
+  .sheet .lbl { font-size: 12px; color: #666; margin-top: 4px; }
+  .sheet button { height: 44px; border: 0; border-radius: 12px; background: #fff; font: inherit; font-size: 14.5px; font-weight: 700; color: #222; text-align: left; padding: 0 14px; cursor: pointer; }
+  .sheet button.danger { color: #c41d2b; }
+  .sheet button.cancel { background: #2b3240; color: #fff; text-align: center; }
+  .toast { position: fixed; left: 50%; bottom: max(24px, env(safe-area-inset-bottom)); transform: translateX(-50%); background: #2b3240; color: #fff; padding: 10px 16px; border-radius: 999px; font-size: 13.5px; font-weight: 700; opacity: 0; transition: opacity .25s; pointer-events: none; z-index: 30; max-width: 90vw; text-align: center; }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="top"><a class="back" href="index.html">☰ เมนู</a><span class="usage" id="usage"></span></div>
+
+  <div class="dev" id="dev">
+    <div class="brand"><b>RETRO <i>TAPE</i></b><span>STEREO · AUTO REVERSE</span></div>
+    <div class="lcd">
+      <div class="marquee static" id="marq"><span id="nowTitle">ใส่เทปก่อน — กดเพิ่มเพลงด้านล่าง</span></div>
+      <div class="lcdrow"><span id="nowAlbum">—</span><span id="time">00:00 / 00:00</span></div>
+    </div>
+    <div class="cassette">
+      <svg viewBox="0 0 260 120" aria-hidden="true">
+        <rect x="4" y="4" width="252" height="112" rx="10" fill="#e9e1cf"/>
+        <rect x="14" y="12" width="232" height="26" rx="4" fill="#fff8ea"/>
+        <rect x="14" y="12" width="232" height="6" fill="#e8702a"/>
+        <text id="tapeLabel" x="130" y="33" text-anchor="middle" font-size="12" font-weight="700" fill="#2b3240" font-family="Comic Sans MS, Chalkboard SE, cursive">RETRO MIX</text>
+        <rect x="48" y="46" width="164" height="54" rx="27" fill="#3a3f48"/>
+        <rect x="56" y="52" width="148" height="42" rx="21" fill="#1c1f24"/>
+        <circle id="packL" cx="88" cy="73" r="30" fill="#4a3426"/>
+        <circle id="packR" cx="172" cy="73" r="16" fill="#4a3426"/>
+        <g class="reel"><circle cx="88" cy="73" r="12" fill="#f4f4f4"/><g fill="#1c1f24"><rect x="86" y="62" width="4" height="7"/><rect x="86" y="77" width="4" height="7"/><rect x="77" y="71" width="7" height="4"/><rect x="92" y="71" width="7" height="4"/></g><circle cx="88" cy="73" r="4" fill="#1c1f24"/></g>
+        <g class="reel"><circle cx="172" cy="73" r="12" fill="#f4f4f4"/><g fill="#1c1f24"><rect x="170" y="62" width="4" height="7"/><rect x="170" y="77" width="4" height="7"/><rect x="161" y="71" width="7" height="4"/><rect x="176" y="71" width="7" height="4"/></g><circle cx="172" cy="73" r="4" fill="#1c1f24"/></g>
+        <rect x="104" y="104" width="52" height="10" rx="2" fill="#cfc6b2"/>
+        <circle cx="20" cy="104" r="4" fill="#cfc6b2"/><circle cx="240" cy="104" r="4" fill="#cfc6b2"/>
+      </svg>
+    </div>
+    <input class="seek" id="seek" type="range" min="0" max="1000" value="0" aria-label="ตำแหน่งเพลง">
+    <div class="btns">
+      <button class="k" id="prev" aria-label="เพลงก่อน">⏮</button>
+      <button class="k play" id="play" aria-label="เล่น/หยุด">▶</button>
+      <button class="k" id="next" aria-label="เพลงถัดไป">⏭</button>
+    </div>
+    <div class="modes">
+      <button class="m" id="shuf">🔀 สุ่ม</button>
+      <button class="m" id="rep">🔁 วนทั้งอัลบั้ม</button>
+      <button class="m" id="sleep">⏲ ปิด</button>
+    </div>
+  </div>
+
+  <div class="albums" id="albums"></div>
+  <div class="bar">
+    <div class="title" id="albTitle"></div>
+    <button class="tool" id="albEdit">⋯</button>
+    <label class="tool add">＋ เพิ่มเพลง<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple></label>
+  </div>
+  <div class="list" id="list"></div>
+
+  <p class="note">🔒 เพลงเก็บอยู่ในเครื่องนี้เท่านั้น ไม่ได้อัปโหลดขึ้นอินเทอร์เน็ต<br>ฟังออฟไลน์ได้ทุกเพลง · ใส่ได้ทั้ง MP3, M4A, WAV</p>
+</div>
+
+<div class="sheet" id="sheet"><div class="box" id="sheetBox"></div></div>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+
+// ---------- IndexedDB: song metadata and audio blobs live in separate stores ----------
+let db = null;
+const req = r => new Promise((res, rej) => { r.onsuccess = () => res(r.result); r.onerror = () => rej(r.error); });
+function openDb() {
+  return new Promise((res, rej) => {
+    const r = indexedDB.open('retro-tape', 1);
+    r.onupgradeneeded = () => {
+      const d = r.result;
+      d.createObjectStore('meta', { keyPath: 'id' });
+      d.createObjectStore('blobs', { keyPath: 'id' });
+    };
+    r.onsuccess = () => res(r.result);
+    r.onerror = () => rej(r.error);
+  });
+}
+const os = (name, mode = 'readonly') => db.transaction(name, mode).objectStore(name);
+function done(tx) { return new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = tx.onabort = () => rej(tx.error); }); }
+
+// ---------- state ----------
+const DEFAULT_ALBUMS = [
+  { id: 'groove', name: '🕺 Groove' },
+  { id: 'nineties', name: '📼 เพลงยุค 90' },
+  { id: 'chinese', name: '🏮 เพลงจีน' },
+];
+let albums = store.get('rt-albums', DEFAULT_ALBUMS);
+let view = store.get('rt-view', albums[0].id);
+let tracks = [];                    // metadata for every song
+let queue = [], qi = -1, curId = null, qAlbum = null;
+let shuffle = store.get('rt-shuffle', 'off');      // off | album | all
+if (shuffle === true) shuffle = 'album';
+if (!['off', 'album', 'all'].includes(shuffle)) shuffle = 'off';
+let repeat = store.get('rt-repeat', 'all');   // off | all | one
+let sleepMin = 0, sleepTimer = null, sleepEnd = 0;
+const audio = new Audio();
+audio.preload = 'auto';
+let objUrl = null;
+
+const byAlbum = id => tracks.filter(t => t.album === id).sort((a, b) => a.added - b.added);
+const albumName = id => (albums.find(a => a.id === id) || { name: '—' }).name;
+const fmt = s => {
+  if (!isFinite(s)) return '00:00';
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60), sec = Math.floor(s % 60);
+  const mmss = String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0');
+  return h ? h + ':' + mmss : mmss;
+};
+// total running time, e.g. "2 ชม. 15 นาที" / "45 นาที"
+function fmtTotal(list) {
+  const sec = list.reduce((a, t) => a + (t.dur || 0), 0);
+  const unknown = list.some(t => !t.dur);
+  if (!sec) return unknown && list.length ? 'กำลังคำนวณเวลา…' : '0 นาที';
+  const mins = Math.round(sec / 60), h = Math.floor(mins / 60), m = mins % 60;
+  return (h ? `${h} ชม. ` : '') + `${m} นาที` + (unknown ? '+' : '');
+}
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toast.h); toast.h = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+// "03 - Artist - Song_Name.mp3" -> { title: "Song Name", artist: "Artist" }
+function parseName(fn) {
+  let s = fn.replace(/\.[^.]+$/, '').replace(/_/g, ' ').replace(/^\s*\d{1,3}\s*[-.)\s]\s*/, '').trim();
+  const parts = s.split(/\s+-\s+/);
+  if (parts.length >= 2) return { artist: parts[0].trim(), title: parts.slice(1).join(' - ').trim() };
+  return { artist: '', title: s || fn };
+}
+
+// ---------- rendering ----------
+function renderAlbums() {
+  const box = $('albums'); box.innerHTML = '';
+  for (const a of albums) {
+    const b = document.createElement('button');
+    b.className = 'chip' + (a.id === view ? ' on' : '');
+    b.textContent = `${a.name} · ${byAlbum(a.id).length}`;
+    b.onclick = () => { view = a.id; store.set('rt-view', view); renderAll(); };
+    box.appendChild(b);
+  }
+  const add = document.createElement('button');
+  add.className = 'chip add'; add.textContent = '＋ อัลบั้ม';
+  add.onclick = newAlbum;
+  box.appendChild(add);
+}
+function renderList() {
+  const list = $('list'); list.innerHTML = '';
+  const items = byAlbum(view);
+  $('albTitle').innerHTML = '';
+  $('albTitle').append(albumName(view));
+  const small = document.createElement('small'); small.textContent = `${items.length} เพลง · ⏱ ${fmtTotal(items)}`; $('albTitle').appendChild(small);
+  if (!items.length) {
+    const e = document.createElement('div'); e.className = 'empty';
+    e.innerHTML = 'ยังไม่มีเพลงในอัลบั้มนี้<br>กด <b>＋ เพิ่มเพลง</b> แล้วเลือกไฟล์เพลงจากเครื่อง<br><small>(เลือกได้หลายไฟล์พร้อมกัน)</small>';
+    list.appendChild(e); return;
+  }
+  items.forEach((t, i) => {
+    const row = document.createElement('div');
+    row.className = 'tr' + (t.id === curId ? ' cur' : '');
+    const n = document.createElement('div'); n.className = 'n'; n.textContent = t.id === curId && !audio.paused ? '♪' : String(i + 1).padStart(2, '0');
+    const tt = document.createElement('div'); tt.className = 't';
+    const b = document.createElement('b'); b.textContent = t.title;
+    const s = document.createElement('span'); s.textContent = [t.artist, t.dur ? fmt(t.dur) : ''].filter(Boolean).join(' · ');
+    tt.append(b, s);
+    const more = document.createElement('button'); more.className = 'more'; more.textContent = '⋯'; more.setAttribute('aria-label', 'ตัวเลือก');
+    more.onclick = e => { e.stopPropagation(); trackMenu(t); };
+    row.append(n, tt, more);
+    row.onclick = () => playFrom(view, t.id);
+    list.appendChild(row);
+  });
+}
+function renderModes() {
+  $('shuf').classList.toggle('on', shuffle !== 'off');
+  $('shuf').textContent = { off: '🔀 ไม่สุ่ม', album: '🔀 สุ่มในอัลบั้ม', all: '🎲 สุ่มทุกอัลบั้ม' }[shuffle];
+  $('rep').classList.toggle('on', repeat !== 'off');
+  $('rep').textContent = repeat === 'one' ? '🔂 วนเพลงเดียว' : repeat === 'all' ? '🔁 วนทั้งอัลบั้ม' : '🔁 ไม่วน';
+  $('sleep').classList.toggle('on', !!sleepMin);
+  $('sleep').textContent = sleepMin ? `⏲ ${Math.max(1, Math.ceil((sleepEnd - Date.now()) / 60000))} นาที` : '⏲ ปิด';
+}
+function renderNow() {
+  const t = tracks.find(x => x.id === curId);
+  const title = t ? (t.artist ? `${t.title} — ${t.artist}` : t.title) : 'ใส่เทปก่อน — กดเพิ่มเพลงด้านล่าง';
+  if ($('nowTitle').textContent !== title) {
+    $('nowTitle').textContent = title;
+    $('marq').classList.toggle('static', title.length < 22);
+  }
+  $('nowAlbum').textContent = t ? albumName(t.album) : '—';
+  const label = t ? albumName(t.album).replace(/^\S+\s/, '') : 'RETRO MIX';
+  $('tapeLabel').textContent = label.length > 26 ? label.slice(0, 25) + '…' : label;
+  $('play').textContent = audio.paused ? '▶' : '❚❚';
+  $('dev').classList.toggle('playing', !audio.paused);
+}
+function renderAll() { renderAlbums(); renderList(); renderModes(); renderNow(); }
+
+async function renderUsage() {
+  try {
+    const e = await navigator.storage.estimate();
+    $('usage').textContent = `ใช้พื้นที่ ${(e.usage / 1048576).toFixed(0)} MB · ${tracks.length} เพลง · ⏱ ${fmtTotal(tracks)}`;
+  } catch (e) { $('usage').textContent = `${tracks.length} เพลง · ⏱ ${fmtTotal(tracks)}`; }
+}
+
+// ---------- tape reels follow playback progress ----------
+function updateProgress() {
+  const d = audio.duration, c = audio.currentTime;
+  const p = d ? c / d : 0;
+  $('packL').setAttribute('r', 16 + 16 * (1 - p));
+  $('packR').setAttribute('r', 16 + 16 * p);
+  if (!seeking) $('seek').value = Math.round(p * 1000);
+  $('time').textContent = `${fmt(c)} / ${fmt(d)}`;
+}
+let seeking = false;
+$('seek').addEventListener('input', () => { seeking = true; if (audio.duration) $('time').textContent = `${fmt($('seek').value / 1000 * audio.duration)} / ${fmt(audio.duration)}`; });
+$('seek').addEventListener('change', () => { if (audio.duration) audio.currentTime = $('seek').value / 1000 * audio.duration; seeking = false; });
+
+// ---------- playback ----------
+function buildQueue(albumId, startId) {
+  qAlbum = albumId;
+  const ids = (shuffle === 'all' ? tracks.slice().sort((a, b) => a.added - b.added) : byAlbum(albumId)).map(t => t.id);
+  if (shuffle !== 'off') {
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    const k = ids.indexOf(startId);
+    if (k > 0) { ids.splice(k, 1); ids.unshift(startId); }
+  }
+  queue = ids; qi = Math.max(0, ids.indexOf(startId));
+}
+async function load(id, autoplay = true, at = 0) {
+  const t = tracks.find(x => x.id === id);
+  if (!t) return;
+  const rec = await req(os('blobs').get(id));
+  if (!rec) { toast('ไม่พบไฟล์เพลงนี้'); return; }
+  if (objUrl) URL.revokeObjectURL(objUrl);
+  objUrl = URL.createObjectURL(rec.blob);
+  curId = id;
+  audio.src = objUrl;
+  if (at) audio.addEventListener('loadedmetadata', () => { audio.currentTime = Math.min(at, (audio.duration || at) - 1); }, { once: true });
+  if (autoplay) { try { await audio.play(); } catch (e) {} }
+  saveState();
+  setMediaSession(t);
+  renderList(); renderNow();
+}
+function playFrom(albumId, id) { buildQueue(albumId, id); load(id); }
+// Songs may have been added, moved or deleted since the queue was built: bring it up to date.
+function syncQueue() {
+  const pool = (shuffle === 'all' ? tracks.slice().sort((a, b) => a.added - b.added) : byAlbum(qAlbum)).map(t => t.id);
+  if (shuffle === 'off') queue = pool;
+  else {
+    queue = queue.filter(id => pool.includes(id));
+    for (const id of pool) {
+      if (queue.includes(id)) continue;
+      const at = Math.max(0, queue.indexOf(curId) + 1);
+      queue.splice(at + Math.floor(Math.random() * (queue.length - at + 1)), 0, id);
+    }
+  }
+  qi = queue.indexOf(curId);
+}
+function step(dir) {
+  if (curId && qAlbum) syncQueue();
+  if (!queue.length) {
+    const items = byAlbum(view); if (!items.length) return;
+    playFrom(view, items[0].id); return;
+  }
+  let n = qi + dir;
+  if (n >= queue.length) { if (repeat === 'off' && dir > 0) { audio.pause(); audio.currentTime = 0; return; } n = 0; }
+  if (n < 0) n = queue.length - 1;
+  qi = n; load(queue[qi]);
+}
+function togglePlay() {
+  if (!curId) { step(1); return; }
+  if (audio.paused) audio.play().catch(() => {}); else audio.pause();
+}
+audio.addEventListener('play', () => { renderNow(); renderList(); });
+audio.addEventListener('pause', () => { renderNow(); renderList(); saveState(); });
+audio.addEventListener('timeupdate', updateProgress);
+audio.addEventListener('loadedmetadata', async () => {
+  updateProgress();
+  const t = tracks.find(x => x.id === curId);
+  if (t && !t.dur && isFinite(audio.duration)) {
+    t.dur = audio.duration;
+    try { await req(os('meta', 'readwrite').put(t)); } catch (e) {}
+    renderList();
+  }
+});
+audio.addEventListener('ended', () => {
+  if (repeat === 'one') { audio.currentTime = 0; audio.play().catch(() => {}); }
+  else step(1);
+});
+audio.addEventListener('error', () => { if (curId) toast('เล่นไฟล์นี้ไม่ได้ ลองไฟล์ MP3 แทน'); });
+
+$('play').onclick = togglePlay;
+$('next').onclick = () => step(1);
+$('prev').onclick = () => { if (audio.currentTime > 3) audio.currentTime = 0; else step(-1); };
+$('shuf').onclick = () => {
+  shuffle = { off: 'album', album: 'all', all: 'off' }[shuffle]; store.set('rt-shuffle', shuffle);
+  if (curId) { const t = tracks.find(x => x.id === curId); if (t) buildQueue(t.album, curId); }
+  renderModes();
+  toast({ off: 'เล่นตามลำดับ', album: 'สุ่มเฉพาะในอัลบั้มนี้', all: 'สุ่มรวมทุกอัลบั้ม 🎲' }[shuffle]);
+};
+$('rep').onclick = () => { repeat = { all: 'one', one: 'off', off: 'all' }[repeat]; store.set('rt-repeat', repeat); renderModes(); };
+$('sleep').onclick = () => {
+  sleepMin = { 0: 15, 15: 30, 30: 60, 60: 0 }[sleepMin];
+  clearTimeout(sleepTimer);
+  if (sleepMin) {
+    sleepEnd = Date.now() + sleepMin * 60000;
+    sleepTimer = setTimeout(() => { audio.pause(); sleepMin = 0; renderModes(); toast('⏲ ตั้งเวลาปิดแล้ว หลับฝันดี'); }, sleepMin * 60000);
+    toast(`เพลงจะหยุดเองใน ${sleepMin} นาที`);
+  }
+  renderModes();
+};
+setInterval(() => { if (sleepMin) renderModes(); }, 30000);
+
+function setMediaSession(t) {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist || albumName(t.album), album: albumName(t.album) });
+    navigator.mediaSession.setActionHandler('play', () => audio.play());
+    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+    navigator.mediaSession.setActionHandler('previoustrack', () => step(-1));
+    navigator.mediaSession.setActionHandler('nexttrack', () => step(1));
+    navigator.mediaSession.setActionHandler('seekto', e => { if (e.seekTime != null) audio.currentTime = e.seekTime; });
+  } catch (e) {}
+}
+function saveState() { store.set('rt-now', { id: curId, pos: audio.currentTime || 0 }); }
+setInterval(() => { if (!audio.paused) saveState(); }, 5000);
+
+// ---------- song lengths ----------
+// Read a file's duration without playing it.
+function probeDuration(blob) {
+  return new Promise(res => {
+    const a = new Audio(), url = URL.createObjectURL(blob);
+    let settled = false;
+    const fin = d => { if (settled) return; settled = true; URL.revokeObjectURL(url); a.removeAttribute('src'); res(d); };
+    a.preload = 'metadata';
+    a.onloadedmetadata = () => fin(isFinite(a.duration) ? a.duration : 0);
+    a.onerror = () => fin(0);
+    setTimeout(() => fin(0), 15000);
+    a.src = url;
+  });
+}
+// Songs added before durations were recorded: measure them in the background.
+async function backfillDurations() {
+  for (const t of tracks.filter(x => !x.dur)) {
+    try {
+      const rec = await req(os('blobs').get(t.id));
+      if (!rec) continue;
+      const d = await probeDuration(rec.blob);
+      if (!d) continue;
+      t.dur = d;
+      await req(os('meta', 'readwrite').put(t));
+      renderList(); renderUsage();
+    } catch (e) {}
+  }
+}
+
+// ---------- adding songs ----------
+$('file').addEventListener('change', async e => {
+  const files = [...e.target.files];
+  e.target.value = '';
+  if (!files.length) return;
+  let ok = 0;
+  for (const f of files) {
+    toast(`กำลังเพิ่ม ${ok + 1}/${files.length}…`);
+    const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+    const { title, artist } = parseName(f.name);
+    const meta = { id, album: view, title, artist, dur: await probeDuration(f), added: Date.now() + ok, size: f.size };
+    try {
+      const tx = db.transaction(['meta', 'blobs'], 'readwrite');
+      tx.objectStore('blobs').put({ id, blob: f });
+      tx.objectStore('meta').put(meta);
+      await done(tx);
+      tracks.push(meta); ok++;
+    } catch (err) {
+      toast(err && err.name === 'QuotaExceededError' ? 'พื้นที่ในเครื่องเต็ม เพิ่มเพลงต่อไม่ได้' : 'เพิ่มไฟล์ไม่สำเร็จ: ' + f.name);
+      break;
+    }
+  }
+  if (ok) toast(`เพิ่มแล้ว ${ok} เพลง 🎶`);
+  renderAll(); renderUsage();
+});
+
+// ---------- album + track management ----------
+function sheet(title, actions) {
+  const box = $('sheetBox'); box.innerHTML = '';
+  const h = document.createElement('h3'); h.textContent = title; box.appendChild(h);
+  for (const a of actions) {
+    if (a.label) { const l = document.createElement('div'); l.className = 'lbl'; l.textContent = a.label; box.appendChild(l); continue; }
+    const b = document.createElement('button');
+    b.textContent = a.text; if (a.cls) b.className = a.cls;
+    b.onclick = () => { closeSheet(); a.fn && a.fn(); };
+    box.appendChild(b);
+  }
+  const c = document.createElement('button'); c.className = 'cancel'; c.textContent = 'ยกเลิก'; c.onclick = closeSheet; box.appendChild(c);
+  $('sheet').classList.add('show');
+}
+function closeSheet() { $('sheet').classList.remove('show'); }
+$('sheet').addEventListener('click', e => { if (e.target.id === 'sheet') closeSheet(); });
+
+function saveAlbums() { store.set('rt-albums', albums); }
+function newAlbum() {
+  const name = (prompt('ชื่ออัลบั้มใหม่ (ใส่อีโมจินำหน้าได้ เช่น 🌴 เพลงชิล)') || '').trim();
+  if (!name) return;
+  const a = { id: 'a' + Date.now().toString(36), name };
+  albums.push(a); saveAlbums(); view = a.id; store.set('rt-view', view); renderAll();
+}
+$('albEdit').onclick = () => {
+  const a = albums.find(x => x.id === view); if (!a) return;
+  sheet(a.name, [
+    { text: '✏️ เปลี่ยนชื่ออัลบั้ม', fn: () => { const n = (prompt('ชื่ออัลบั้ม', a.name) || '').trim(); if (n) { a.name = n; saveAlbums(); renderAll(); } } },
+    { text: '🔀 เล่นแบบสุ่มทั้งอัลบั้ม', fn: () => { const items = byAlbum(a.id); if (!items.length) return; shuffle = 'album'; store.set('rt-shuffle', shuffle); playFrom(a.id, items[Math.floor(Math.random() * items.length)].id); renderModes(); } },
+    { text: '🎲 สุ่มเพลงจากทุกอัลบั้ม', fn: () => { if (!tracks.length) return; shuffle = 'all'; store.set('rt-shuffle', shuffle); const t = tracks[Math.floor(Math.random() * tracks.length)]; playFrom(t.album, t.id); renderModes(); } },
+    { text: '🗑 ลบอัลบั้มนี้และเพลงทั้งหมดในอัลบั้ม', cls: 'danger', fn: () => deleteAlbum(a) },
+  ]);
+};
+async function deleteAlbum(a) {
+  const items = byAlbum(a.id);
+  if (albums.length <= 1) { toast('ต้องมีอย่างน้อย 1 อัลบั้ม'); return; }
+  if (!confirm(`ลบอัลบั้ม "${a.name}" และเพลง ${items.length} เพลง?`)) return;
+  for (const t of items) await deleteTrack(t, true);
+  albums = albums.filter(x => x.id !== a.id); saveAlbums();
+  view = albums[0].id; store.set('rt-view', view);
+  renderAll(); renderUsage();
+}
+function trackMenu(t) {
+  const moves = albums.filter(a => a.id !== t.album).map(a => ({ text: '→ ' + a.name, fn: () => moveTrack(t, a.id) }));
+  sheet(t.title, [
+    { text: '▶ เล่นเพลงนี้', fn: () => playFrom(t.album, t.id) },
+    { text: '✏️ แก้ชื่อเพลง / ศิลปิน', fn: () => renameTrack(t) },
+    ...(moves.length ? [{ label: 'ย้ายไปอัลบั้ม' }, ...moves] : []),
+    { text: '🗑 ลบเพลงนี้', cls: 'danger', fn: async () => { if (confirm(`ลบ "${t.title}"?`)) { await deleteTrack(t); renderAll(); renderUsage(); } } },
+  ]);
+}
+async function renameTrack(t) {
+  const title = prompt('ชื่อเพลง', t.title); if (title === null) return;
+  const artist = prompt('ชื่อศิลปิน (เว้นว่างได้)', t.artist || ''); if (artist === null) return;
+  t.title = title.trim() || t.title; t.artist = artist.trim();
+  await req(os('meta', 'readwrite').put(t));
+  if (t.id === curId) setMediaSession(t);
+  renderAll();
+}
+async function moveTrack(t, albumId) {
+  t.album = albumId;
+  await req(os('meta', 'readwrite').put(t));
+  toast('ย้ายไป ' + albumName(albumId) + ' แล้ว');
+  renderAll();
+}
+async function deleteTrack(t, quiet) {
+  const tx = db.transaction(['meta', 'blobs'], 'readwrite');
+  tx.objectStore('meta').delete(t.id); tx.objectStore('blobs').delete(t.id);
+  await done(tx);
+  tracks = tracks.filter(x => x.id !== t.id);
+  const k = queue.indexOf(t.id);
+  if (k >= 0) { queue.splice(k, 1); if (k < qi) qi--; }
+  if (t.id === curId) { audio.pause(); audio.removeAttribute('src'); curId = null; if (objUrl) { URL.revokeObjectURL(objUrl); objUrl = null; } updateProgress(); }
+  if (!quiet) toast('ลบแล้ว');
+}
+
+// ---------- start ----------
+(async () => {
+  try {
+    db = await openDb();
+    tracks = await req(os('meta').getAll());
+  } catch (e) {
+    toast('เบราว์เซอร์นี้เก็บเพลงไม่ได้ (โหมดส่วนตัว?)');
+  }
+  if (!albums.some(a => a.id === view)) view = albums[0].id;
+  try { if (navigator.storage && navigator.storage.persist) navigator.storage.persist(); } catch (e) {}
+  const last = store.get('rt-now', null);
+  if (last && tracks.some(t => t.id === last.id)) {
+    const t = tracks.find(x => x.id === last.id);
+    buildQueue(t.album, t.id);
+    await load(t.id, false, last.pos);
+  }
+  renderAll(); renderUsage(); updateProgress();
+  if (db) backfillDurations();
+})();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

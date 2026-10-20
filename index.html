@@ -40,6 +40,11 @@
   .card b { display: block; font-size: 16px; }
   .card span { font-size: 13px; color: #555; line-height: 1.35; }
   .status { margin: 20px 4px 0; font-size: 12.5px; color: #3c4a6b; text-align: center; }
+  /* unfolded foldables / tablets: two columns of games */
+  @media (min-width: 760px) {
+    .dev { width: min(100vw, 920px); padding-left: 24px; padding-right: 24px; }
+    .list { grid-template-columns: 1fr 1fr; gap: 14px; }
+  }
   .status.ok { color: #2f7a4d; font-weight: 700; }
 </style>
 </head>
@@ -52,6 +57,7 @@
 
   <nav class="list">
     <a class="card" href="bird.html"><div class="ico">🐦</div><div><b>แม่นกป้อนอาหาร</b><span>คาบหนอนไปป้อนลูก ยิ่งเล่นยิ่งเร็ว · แบบ Game &amp; Watch</span></div></a>
+    <a class="card" href="music.html"><div class="ico">📼</div><div><b>Retro Tape</b><span>เครื่องเล่นเทปยุค 90 · ฟังเพลงของคุณแบบออฟไลน์</span></div></a>
     <a class="card" href="zombie.html"><div class="ico">🧟</div><div><b>Zombie Survival</b><span>เอาชีวิตรอดในป่าช้า ยิงซอมบี้และผี · อัปเกรดทุกระลอก</span></div></a>
     <a class="card" href="race.html"><div class="ico">🏎️</div><div><b>Road Rush</b><span>ขับแซงบนถนน 4 เลน ห้ามชนท้าย · เก็บน้ำมันระหว่างทาง</span></div></a>
     <a class="card" href="words.html"><div class="ico">🔤</div><div><b>หาคำ</b><span>Word Search ไทย / English · ลากนิ้วหาคำที่ซ่อนอยู่</span></div></a>
