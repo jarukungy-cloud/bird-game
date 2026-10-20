@@ -106,7 +106,7 @@
   /* ---- bottom sheet ---- */
   .sheet { position: fixed; inset: 0; z-index: 20; display: none; align-items: flex-end; justify-content: center; background: rgba(0,0,0,.45); }
   .sheet.show { display: flex; }
-  .sheet .box { width: min(100vw, 520px); background: #f7f3e8; border-radius: 20px 20px 0 0; padding: 16px 16px max(18px, env(safe-area-inset-bottom)); display: grid; gap: 8px; }
+  .sheet .box { max-height: 85vh; overflow-y: auto; width: min(100vw, 520px); background: #f7f3e8; border-radius: 20px 20px 0 0; padding: 16px 16px max(18px, env(safe-area-inset-bottom)); display: grid; gap: 8px; }
   .sheet h3 { margin: 0 0 4px; font-size: 15px; color: #222; word-break: break-word; }
   .sheet .lbl { font-size: 12px; color: #666; margin-top: 4px; }
   .sheet button { height: 44px; border: 0; border-radius: 12px; background: #fff; font: inherit; font-size: 14.5px; font-weight: 700; color: #222; text-align: left; padding: 0 14px; cursor: pointer; }
@@ -158,6 +158,7 @@
   <div class="albums" id="albums"></div>
   <div class="bar">
     <div class="title" id="albTitle"></div>
+    <button class="tool" id="dupBtn" aria-label="ตรวจเพลงซ้ำ">🔍 ซ้ำ</button>
     <button class="tool" id="albEdit">⋯</button>
     <label class="tool add">＋ เพิ่มเพลง<input type="file" id="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac" multiple></label>
   </div>
@@ -438,6 +439,53 @@ function setMediaSession(t) {
 function saveState() { store.set('rt-now', { id: curId, pos: audio.currentTime || 0 }); }
 setInterval(() => { if (!audio.paused) saveState(); }, 5000);
 
+// ---------- duplicate detection ----------
+// Same size + same first 64 KB = same file (fast, and works without a secure context).
+async function fingerprint(blob) {
+  const b = new Uint8Array(await blob.slice(0, 65536).arrayBuffer());
+  let h = 0x811c9dc5;
+  for (let i = 0; i < b.length; i++) { h ^= b[i]; h = Math.imul(h, 0x01000193) >>> 0; }
+  return blob.size + ':' + h.toString(16);
+}
+const normTitle = t => ((t.artist || '') + ' ' + t.title).toLowerCase().replace(/[^\p{L}\p{M}\p{N}]+/gu, '');
+function groupBy(list, key) {
+  const m = new Map();
+  for (const t of list) { const k = key(t); if (!k) continue; if (!m.has(k)) m.set(k, []); m.get(k).push(t); }
+  return [...m.values()].filter(g => g.length > 1).map(g => g.sort((a, b) => a.added - b.added));
+}
+function showDupes() {
+  const pending = tracks.filter(t => !t.fp).length;
+  const exact = groupBy(tracks, t => t.fp);
+  const exactIds = new Set(exact.flat().map(t => t.id));
+  const named = groupBy(tracks, normTitle).filter(g => !g.every(t => exactIds.has(t.id)));
+  const acts = [];
+  if (pending) acts.push({ label: `⏳ ยังตรวจไม่ครบ ${pending} เพลง (แอปกำลังตรวจอยู่ ลองกดใหม่อีกสักครู่)` });
+  if (!exact.length && !named.length) {
+    sheet(pending ? '🔍 ตรวจเพลงซ้ำ' : '✅ ไม่มีเพลงซ้ำเลย', acts);
+    return;
+  }
+  if (exact.length) {
+    const extra = exact.flatMap(g => g.slice(1));
+    const mb = extra.reduce((a, t) => a + (t.size || 0), 0) / 1048576;
+    acts.push({ label: `📄 ไฟล์ซ้ำกันเป๊ะ ${exact.length} เพลง (เก็บไว้ตัวที่เพิ่มก่อน)` });
+    for (const g of exact) acts.push({ label: `• ${g[0].title} — อยู่ใน ${g.map(t => albumName(t.album)).join(', ')}` });
+    acts.push({
+      text: `🗑 ลบตัวซ้ำ ${extra.length} ไฟล์ (คืนพื้นที่ ${mb.toFixed(0)} MB)`, cls: 'danger',
+      fn: async () => {
+        if (!confirm(`ลบไฟล์ที่ซ้ำ ${extra.length} ไฟล์? (เก็บไว้ 1 ไฟล์ต่อเพลง)`)) return;
+        for (const t of extra) await deleteTrack(t, true);
+        renderAll(); renderUsage(); toast(`ลบตัวซ้ำแล้ว ${extra.length} ไฟล์ ✨`);
+      },
+    });
+  }
+  if (named.length) {
+    acts.push({ label: `🎵 ชื่อเพลงซ้ำแต่เป็นคนละไฟล์ ${named.length} ชุด — อาจเป็นคนละเวอร์ชัน ฟังแล้วลบเองได้ที่ปุ่ม ⋯ ของเพลง` });
+    for (const g of named) acts.push({ label: `• ${g[0].title} — ${g.map(t => `${albumName(t.album)} (${fmt(t.dur)})`).join(' / ')}` });
+  }
+  sheet('🔍 ผลตรวจเพลงซ้ำ', acts);
+}
+$('dupBtn').onclick = showDupes;
+
 // ---------- song lengths ----------
 // Read a file's duration without playing it.
 function probeDuration(blob) {
@@ -454,13 +502,12 @@ function probeDuration(blob) {
 }
 // Songs added before durations were recorded: measure them in the background.
 async function backfillDurations() {
-  for (const t of tracks.filter(x => !x.dur)) {
+  for (const t of tracks.filter(x => !x.dur || !x.fp)) {
     try {
       const rec = await req(os('blobs').get(t.id));
       if (!rec) continue;
-      const d = await probeDuration(rec.blob);
-      if (!d) continue;
-      t.dur = d;
+      if (!t.fp) t.fp = await fingerprint(rec.blob);
+      if (!t.dur) t.dur = await probeDuration(rec.blob);
       await req(os('meta', 'readwrite').put(t));
       renderList(); renderUsage();
     } catch (e) {}
@@ -473,11 +520,16 @@ $('file').addEventListener('change', async e => {
   e.target.value = '';
   if (!files.length) return;
   let ok = 0;
-  for (const f of files) {
-    toast(`กำลังเพิ่ม ${ok + 1}/${files.length}…`);
+  const skipped = [];
+  for (const [i, f] of files.entries()) {
+    toast(`กำลังเพิ่ม ${i + 1}/${files.length}…`);
+    let fp = '';
+    try { fp = await fingerprint(f); } catch (e) {}
+    const dupe = fp && tracks.find(t => t.fp === fp);
+    if (dupe) { skipped.push(`${dupe.title} (มีแล้วใน ${albumName(dupe.album)})`); continue; }
     const id = Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
     const { title, artist } = parseName(f.name);
-    const meta = { id, album: view, title, artist, dur: await probeDuration(f), added: Date.now() + ok, size: f.size };
+    const meta = { id, album: view, title, artist, dur: await probeDuration(f), added: Date.now() + ok, size: f.size, fp };
     try {
       const tx = db.transaction(['meta', 'blobs'], 'readwrite');
       tx.objectStore('blobs').put({ id, blob: f });
@@ -489,7 +541,8 @@ $('file').addEventListener('change', async e => {
       break;
     }
   }
-  if (ok) toast(`เพิ่มแล้ว ${ok} เพลง 🎶`);
+  if (skipped.length) sheet(`เพิ่มแล้ว ${ok} เพลง · ข้ามเพลงซ้ำ ${skipped.length} เพลง`, skipped.map(x => ({ label: '• ' + x })));
+  else if (ok) toast(`เพิ่มแล้ว ${ok} เพลง 🎶`);
   renderAll(); renderUsage();
 });
 

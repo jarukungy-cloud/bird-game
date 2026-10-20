@@ -1,6 +1,6 @@
 // Cache-first service worker so the game runs with no signal once installed.
 // Bump the version whenever any file changes, so phones fetch the new copies.
-const CACHE = 'retro-games-v11';
+const CACHE = 'retro-games-v12';
 const FILES = [
   './', './index.html', './bird.html', './brick.html', './lights.html', './2048.html', './words.html', './race.html', './zombie.html',
   './music.html',
