@@ -1,0 +1,13 @@
+{
+  "name": "Bird Feeder & Brick Game",
+  "short_name": "Bird Feeder",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#1b1d22",
+  "theme_color": "#1b1d22",
+  "icons": [
+    { "src": "icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

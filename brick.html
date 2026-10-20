@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Brick Game</title>
+<meta name="theme-color" content="#1b1d22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Brick Game">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root {
+    --bw: min(23vh, 50vw, 240px);
+    --btn: min(16vw, 8.5vh, 72px);
+    --rot: min(25vw, 13vh, 112px);
+    --lcd: #9ead86;
+    --ink: #161b12;
+    --off: rgba(0, 0, 0, .085);
+    --body-a: #f6cb48;
+    --body-b: #dfa91c;
+    --label: #6b4306;
+  }
+  @supports (height: 1dvh) {
+    :root {
+      --bw: min(23dvh, 50vw, 240px);
+      --btn: min(16vw, 8.5dvh, 72px);
+      --rot: min(25vw, 13dvh, 112px);
+    }
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #1b1d22;
+    font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+    touch-action: manipulation;
+  }
+  body { display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh; }
+
+  .device {
+    width: min(100vw, 460px); height: 100%; max-height: 920px;
+    background: linear-gradient(160deg, var(--body-a), var(--body-b));
+    border-radius: 28px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "brand brand" "screen screen" "hint hint" "smalls smalls" "dpad rot";
+    grid-template-rows: auto auto auto auto 1fr;
+    align-items: center; justify-items: center;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+    box-shadow: inset 0 2px 0 rgba(255,255,255,.4), inset 0 -4px 0 rgba(0,0,0,.12);
+  }
+  @media (max-width: 480px) { .device { border-radius: 0; } }
+
+  .brand { grid-area: brand; font-weight: 900; letter-spacing: .18em; color: #8a2412; font-size: 15px; padding: 2px 0 8px; }
+  .brand small { font-weight: 700; letter-spacing: .05em; color: var(--label); margin-left: 6px; }
+
+  .bezel {
+    grid-area: screen;
+    background: #26303b;
+    padding: calc(var(--bw) * .06);
+    border-radius: 12px 12px 40px 12px;
+    box-shadow: inset 0 2px 4px rgba(0,0,0,.5), 0 2px 0 rgba(255,255,255,.35);
+  }
+  .lcd {
+    background: radial-gradient(ellipse at 30% 20%, #a8b78f, var(--lcd) 70%);
+    padding: calc(var(--bw) * .04);
+    display: flex; gap: calc(var(--bw) * .05);
+    border-radius: 4px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.35);
+  }
+  .board {
+    width: var(--bw); aspect-ratio: 1 / 2;
+    display: grid; grid-template-columns: repeat(10, 1fr); grid-template-rows: repeat(20, 1fr);
+    gap: calc(var(--bw) * .012);
+    padding: calc(var(--bw) * .012);
+    border: 1px solid rgba(0,0,0,.3);
+  }
+  .c { position: relative; color: var(--off); border: max(1px, calc(var(--bw) * .009)) solid currentColor; }
+  .c::after { content: ""; position: absolute; inset: 22%; background: currentColor; }
+  .c.on { color: var(--ink); }
+
+  .side {
+    width: calc(var(--bw) * .62);
+    display: flex; flex-direction: column;
+    color: var(--ink);
+    font-family: "Courier New", Courier, monospace; font-weight: 700;
+  }
+  .lbl { font-size: calc(var(--bw) * .056); letter-spacing: .04em; opacity: .85; }
+  .num { font-size: calc(var(--bw) * .092); text-align: right; margin-bottom: calc(var(--bw) * .04); }
+  .next {
+    width: calc(var(--bw) * .4); aspect-ratio: 1;
+    display: grid; grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(4, 1fr);
+    gap: calc(var(--bw) * .012);
+    margin: calc(var(--bw) * .02) 0 calc(var(--bw) * .05);
+  }
+  .gname { font-size: calc(var(--bw) * .068); line-height: 1.25; margin-top: auto; white-space: pre-line; }
+  .status { display: flex; justify-content: space-between; font-size: calc(var(--bw) * .06); margin-top: calc(var(--bw) * .04); }
+  .status .dim { opacity: .1; }
+
+  .hint {
+    grid-area: hint; color: var(--label); font-size: 12.5px; font-weight: 600;
+    text-align: center; min-height: 2.6em; padding: 8px 4px 0; line-height: 1.3;
+  }
+
+  .smalls { grid-area: smalls; display: flex; gap: 26px; margin: 6px 0 4px; }
+  .sb { display: flex; flex-direction: column; align-items: center; gap: 4px; font-size: 10px; font-weight: 800; color: var(--label); letter-spacing: .04em; }
+  .sb button {
+    width: calc(var(--btn) * .55); height: calc(var(--btn) * .55);
+    border-radius: 50%; border: 0; background: #34373d;
+    box-shadow: 0 3px 0 #15171a, 0 4px 6px rgba(0,0,0,.25);
+  }
+
+  button { touch-action: none; cursor: pointer; padding: 0; font: inherit; }
+  .pressed { transform: translateY(3px); box-shadow: 0 0 0 transparent !important; filter: brightness(.92); }
+
+  .dpad { grid-area: dpad; position: relative; width: calc(var(--btn) * 2.6); height: calc(var(--btn) * 2.6); }
+  .pad {
+    position: absolute; width: var(--btn); height: var(--btn);
+    border-radius: 50%; border: 0;
+    background: radial-gradient(circle at 35% 30%, #ff7a7a, #c8202d 70%);
+    box-shadow: 0 4px 0 #7d0a12, 0 6px 10px rgba(0,0,0,.3);
+    color: rgba(255,255,255,.9); font-size: calc(var(--btn) * .3);
+  }
+  .pad[data-b="up"]    { left: calc(50% - var(--btn) / 2); top: 0; }
+  .pad[data-b="down"]  { left: calc(50% - var(--btn) / 2); bottom: 0; }
+  .pad[data-b="left"]  { left: 0; top: calc(50% - var(--btn) / 2); }
+  .pad[data-b="right"] { right: 0; top: calc(50% - var(--btn) / 2); }
+
+  .rotwrap { grid-area: rot; display: flex; flex-direction: column; align-items: center; gap: 8px; font-size: 11px; font-weight: 800; color: var(--label); letter-spacing: .08em; }
+  .rotwrap .pad { position: static; width: var(--rot); height: var(--rot); font-size: calc(var(--rot) * .22); }
+
+  @media (orientation: landscape) and (max-height: 560px) {
+    :root { --bw: min(32vh, 26vw); --btn: min(17vh, 9vw, 72px); --rot: min(28vh, 14vw, 112px); }
+    @supports (height: 1dvh) { :root { --bw: min(32dvh, 26vw); --btn: min(17dvh, 9vw, 72px); --rot: min(28dvh, 14vw, 112px); } }
+    .device {
+      width: 100vw; max-height: none; border-radius: 0;
+      grid-template-columns: 1fr auto 1fr;
+      grid-template-areas: "dpad screen rot" "dpad hint rot" "dpad smalls rot";
+      grid-template-rows: auto auto auto;
+      align-content: center;
+      padding: 8px max(16px, env(safe-area-inset-right)) 8px max(16px, env(safe-area-inset-left));
+    }
+    .brand { display: none; }
+    .hint { min-height: 0; padding-top: 4px; }
+    .smalls { margin: 2px 0 0; }
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="brand">BRICK GAME <small>9999 in 1</small> <a href="index.html" style="margin-left:10px;font-size:11px;color:#6b4306">🐦 Bird Feeder</a></div>
+
+  <div class="bezel">
+    <div class="lcd">
+      <div class="board" id="board"></div>
+      <div class="side">
+        <div class="lbl">SCORE</div>
+        <div class="num" id="score">0</div>
+        <div class="lbl">HI-SCORE</div>
+        <div class="num" id="hi">0</div>
+        <div class="lbl" id="nextLbl">NEXT</div>
+        <div class="next" id="next"></div>
+        <div class="lbl">LEVEL</div>
+        <div class="num" id="level">1</div>
+        <div class="gname" id="gname"></div>
+        <div class="status"><span id="pauseIco" class="dim">PAUSE</span><span id="sndIco">♪</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="hint" id="hint"></div>
+
+  <div class="smalls">
+    <div class="sb"><button data-b="start" aria-label="Start / Pause"></button>START</div>
+    <div class="sb"><button data-b="sound" aria-label="Sound"></button>SOUND</div>
+    <div class="sb"><button data-b="reset" aria-label="Back to menu"></button>MENU</div>
+  </div>
+
+  <div class="dpad">
+    <button class="pad" data-b="up" aria-label="Up">▲</button>
+    <button class="pad" data-b="left" aria-label="Left">◀</button>
+    <button class="pad" data-b="right" aria-label="Right">▶</button>
+    <button class="pad" data-b="down" aria-label="Down">▼</button>
+  </div>
+
+  <div class="rotwrap">
+    <button class="pad" data-b="rot" aria-label="Rotate / Action">⟳</button>
+    ROTATE
+  </div>
+</div>
+
+<script>
+'use strict';
+const W = 10, H = 20;
+const $ = id => document.getElementById(id);
+
+// ---------- storage (best effort) ----------
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+
+// ---------- display ----------
+const grid = (w, h) => Array.from({ length: h }, () => new Array(w).fill(0));
+const clearG = g => { for (const r of g) r.fill(0); };
+const B = grid(W, H), N = grid(4, 4);
+const cellEls = [], nextEls = [];
+for (let i = 0; i < W * H; i++) { const d = document.createElement('div'); d.className = 'c'; $('board').appendChild(d); cellEls.push(d); }
+for (let i = 0; i < 16; i++) { const d = document.createElement('div'); d.className = 'c'; $('next').appendChild(d); nextEls.push(d); }
+const prevB = new Array(W * H).fill(-1), prevN = new Array(16).fill(-1);
+
+function px(x, y, v = 1) { if (x >= 0 && x < W && y >= 0 && y < H) B[y][x] = v; }
+function nx(x, y) { if (x >= 0 && x < 4 && y >= 0 && y < 4) N[y][x] = 1; }
+function blit(rows, x, y) { rows.forEach((r, j) => { for (let i = 0; i < r.length; i++) if (r[i] === 'X') px(x + i, y + j); }); }
+function flush() {
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = y * W + x, v = B[y][x] ? 1 : 0;
+    if (prevB[i] !== v) { prevB[i] = v; cellEls[i].classList.toggle('on', !!v); }
+  }
+  for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) {
+    const i = y * 4 + x, v = N[y][x] ? 1 : 0;
+    if (prevN[i] !== v) { prevN[i] = v; nextEls[i].classList.toggle('on', !!v); }
+  }
+}
+function setText(el, v) { if (el._v !== v) { el._v = v; el.textContent = v; } }
+
+// ---------- sound ----------
+let ac = null;
+let sound = store.get('bg-sound', true);
+function ensureAudio() {
+  if (!ac) { try { ac = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (ac && ac.state === 'suspended') ac.resume();
+}
+function beep(f, d = 0.05, delay = 0) {
+  if (!sound || !ac) return;
+  const o = ac.createOscillator(), g = ac.createGain(), t = ac.currentTime + delay;
+  o.type = 'square'; o.frequency.value = f;
+  g.gain.setValueAtTime(0.05, t);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + d);
+  o.connect(g); g.connect(ac.destination);
+  o.start(t); o.stop(t + d + 0.02);
+}
+function tune(notes) { let t = 0; for (const [f, d] of notes) { beep(f, d, t); t += d; } }
+const sfx = {
+  sel:   () => beep(880, .03),
+  move:  () => beep(660, .025),
+  rot:   () => beep(990, .04),
+  drop:  () => beep(220, .06),
+  eat:   () => beep(1200, .05),
+  line:  n => tune([[523, .07], [659, .07], [784, .07], [1047, .07], [1319, .12]].slice(0, n + 1)),
+  up:    () => tune([[784, .06], [1047, .1]]),
+  lose:  () => tune([[400, .1], [300, .15]]),
+  over:  () => tune([[523, .12], [392, .12], [330, .12], [262, .3]]),
+  start: () => tune([[523, .06], [659, .06], [784, .1]]),
+};
+
+// ---------- shared game state ----------
+let state = 'menu';            // menu | play | pause | dying
+let sel = store.get('bg-sel', 0);
+let startLevel = store.get('bg-level', 1);
+let game = null, score = 0, level = 1, now = 0, animT = 0, acc = 0;
+const held = new Set();
+const blinkOn = () => Math.floor(now / 250) % 2 === 0;
+const rnd = n => Math.floor(Math.random() * n);
+const hiScores = {};
+
+// ---------- GAME A: Tetris ----------
+const SHAPES = [
+  ['....', 'XXXX', '....', '....'],
+  ['XX', 'XX'],
+  ['.X.', 'XXX', '...'],
+  ['.XX', 'XX.', '...'],
+  ['XX.', '.XX', '...'],
+  ['X..', 'XXX', '...'],
+  ['..X', 'XXX', '...'],
+].map(s => s.map(r => [...r].map(ch => ch === 'X' ? 1 : 0)));
+
+function Tetris() {
+  const well = grid(W, H);
+  let cur = null, nxt = null, bag = [], lines = 0;
+
+  function take() {
+    if (!bag.length) { bag = [0, 1, 2, 3, 4, 5, 6]; for (let i = 6; i > 0; i--) { const j = rnd(i + 1); [bag[i], bag[j]] = [bag[j], bag[i]]; } }
+    return SHAPES[bag.pop()].map(r => r.slice());
+  }
+  function fits(m, x, y) {
+    for (let r = 0; r < m.length; r++) for (let c = 0; c < m.length; c++) if (m[r][c]) {
+      const X = x + c, Y = y + r;
+      if (X < 0 || X >= W || Y >= H) return false;
+      if (Y >= 0 && well[Y][X]) return false;
+    }
+    return true;
+  }
+  const rotate = m => m.map((r, i) => r.map((_, j) => m[m.length - 1 - j][i]));
+  function spawn() {
+    const m = nxt || take(); nxt = take();
+    const top = m.findIndex(r => r.some(v => v));
+    cur = { m, x: Math.floor((W - m.length) / 2), y: -top };
+    if (!fits(cur.m, cur.x, cur.y)) die();
+  }
+  function lock() {
+    let over = false;
+    cur.m.forEach((r, j) => r.forEach((v, i) => {
+      if (!v) return;
+      if (cur.y + j < 0) over = true; else well[cur.y + j][cur.x + i] = 1;
+    }));
+    if (over) { die(); return; }
+    let n = 0;
+    for (let y = H - 1; y >= 0; y--) {
+      if (well[y].every(v => v)) { well.splice(y, 1); well.unshift(new Array(W).fill(0)); n++; y++; }
+    }
+    if (n) {
+      lines += n;
+      score += [0, 100, 300, 500, 800][n] * level;
+      const nl = Math.min(15, startLevel + Math.floor(lines / 10));
+      if (nl > level) { level = nl; sfx.up(); } else sfx.line(n);
+    } else sfx.drop();
+    spawn();
+  }
+  spawn();
+
+  return {
+    label: 'NEXT',
+    hint: '◀ ▶ ย้าย · ▼ ลงเร็ว · ▲ ทิ้งดิ่ง · ⟳ หมุน',
+    interval: () => Math.max(60, Math.round(800 * Math.pow(0.82, level - 1))),
+    tick() { if (fits(cur.m, cur.x, cur.y + 1)) cur.y++; else lock(); },
+    input(b) {
+      if (b === 'left' || b === 'right') {
+        const d = b === 'left' ? -1 : 1;
+        if (fits(cur.m, cur.x + d, cur.y)) { cur.x += d; sfx.move(); }
+      } else if (b === 'down') {
+        if (fits(cur.m, cur.x, cur.y + 1)) { cur.y++; score += 1; acc = 0; } else lock();
+      } else if (b === 'up') {
+        while (fits(cur.m, cur.x, cur.y + 1)) { cur.y++; score += 2; }
+        lock(); acc = 0;
+      } else if (b === 'rot') {
+        const m = rotate(cur.m);
+        for (const k of [0, -1, 1, -2, 2]) {
+          if (fits(m, cur.x + k, cur.y)) { cur.m = m; cur.x += k; sfx.rot(); break; }
+        }
+      }
+    },
+    draw() {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (well[y][x]) px(x, y);
+      cur.m.forEach((r, j) => r.forEach((v, i) => { if (v) px(cur.x + i, cur.y + j); }));
+    },
+    drawNext() {
+      const off = nxt.length === 4 ? 0 : 1;
+      nxt.forEach((r, j) => r.forEach((v, i) => { if (v) nx(i + (nxt.length === 2 ? 1 : 0), j + off); }));
+    },
+  };
+}
+
+// ---------- GAME B: Snake ----------
+function Snake() {
+  const body = [{ x: 4, y: 12 }, { x: 4, y: 13 }, { x: 4, y: 14 }];
+  const D = { up: { x: 0, y: -1 }, down: { x: 0, y: 1 }, left: { x: -1, y: 0 }, right: { x: 1, y: 0 } };
+  let dir = D.up, q = [], food = null, eaten = 0;
+
+  function place() {
+    const free = [];
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (!body.some(s => s.x === x && s.y === y)) free.push({ x, y });
+    food = free.length ? free[rnd(free.length)] : null;
+    if (!food) die();
+  }
+  place();
+
+  return {
+    label: '',
+    hint: 'ปุ่มลูกศร เลี้ยว · ⟳ เร่ง 1 ช่อง',
+    interval: () => Math.max(70, 380 - (level - 1) * 28),
+    input(b) {
+      if (D[b]) {
+        const last = q.length ? q[q.length - 1] : dir, d = D[b];
+        if ((d.x === -last.x && d.y === -last.y) || (d.x === last.x && d.y === last.y)) return;
+        if (q.length < 3) q.push(d);
+      } else if (b === 'rot') { this.tick(); acc = 0; }
+    },
+    tick() {
+      if (q.length) dir = q.shift();
+      const h = body[0], x = h.x + dir.x, y = h.y + dir.y;
+      const eat = food && x === food.x && y === food.y;
+      if (x < 0 || x >= W || y < 0 || y >= H ||
+          body.some((s, i) => (i < body.length - 1 || eat) && s.x === x && s.y === y)) { die(); return; }
+      body.unshift({ x, y });
+      if (eat) {
+        score += 10 * level; eaten++;
+        if (eaten % 5 === 0 && level < 15) { level++; sfx.up(); } else sfx.eat();
+        place();
+      } else body.pop();
+    },
+    draw() {
+      for (const s of body) px(s.x, s.y);
+      if (food && blinkOn()) px(food.x, food.y);
+    },
+    drawNext() {},
+  };
+}
+
+// ---------- GAME C: Racing ----------
+function Racing() {
+  const LX = [2, 5];
+  const ME = ['.X.', 'XXX', '.X.', 'X.X'];
+  const EN = ['X.X', '.X.', 'XXX', '.X.'];
+  let lane = 0, cars = [], off = 0, gap = 0, passed = 0;
+  const hit = () => cars.some(c => c.l === lane && c.y + 3 >= 16 && c.y <= 19);
+  function steer(l) { if (l === lane) return; lane = l; sfx.move(); if (hit()) die(); }
+
+  return {
+    label: '',
+    hint: '◀ ▶ หรือ ⟳ เปลี่ยนเลน · กด ▲ ค้างไว้เพื่อเร่ง',
+    interval() { const b = Math.max(45, 240 - (level - 1) * 18); return held.has('up') ? b * 0.5 : b; },
+    input(b) {
+      if (b === 'left') steer(0);
+      else if (b === 'right') steer(1);
+      else if (b === 'rot') steer(1 - lane);
+    },
+    tick() {
+      off++;
+      for (const c of cars) c.y++;
+      cars = cars.filter(c => {
+        if (c.y < H) return true;
+        passed++; score += 10 * level;
+        if (passed % 8 === 0 && level < 15) { level++; sfx.up(); }
+        return false;
+      });
+      const top = cars.length ? Math.min(...cars.map(c => c.y)) : 99;
+      if (top >= gap) { cars.push({ l: rnd(2), y: -4 }); gap = 9 + rnd(4); }
+      if (hit()) die();
+    },
+    draw() {
+      for (let y = 0; y < H; y++) if (((y - off) % 5 + 5) % 5 < 3) { px(0, y); px(9, y); }
+      for (const c of cars) blit(EN, LX[c.l], c.y);
+      blit(ME, LX[lane], 16);
+    },
+    drawNext() {},
+  };
+}
+
+// ---------- GAME D: Breakout ----------
+function Breakout() {
+  let br, pad = 3, bx, by, dx, dy, stuck, lives = 3;
+  function build() { br = grid(W, H); const rows = Math.min(8, 2 + level); for (let y = 0; y < rows; y++) br[y].fill(1); }
+  function reset() { stuck = true; bx = pad + 1; by = H - 2; dy = -1; dx = Math.random() < .5 ? -1 : 1; }
+  function breakAt(x, y) {
+    br[y][x] = 0; dy = -dy; score += 5 * level; sfx.move();
+    if (br.every(r => r.every(v => !v))) { level = Math.min(15, level + 1); score += 100 * level; sfx.up(); build(); reset(); }
+  }
+  build(); reset();
+
+  return {
+    label: 'LIFE',
+    hint: '◀ ▶ ขยับแป้น · ⟳ หรือ ▲ ปล่อยลูก',
+    interval: () => Math.max(55, 190 - (level - 1) * 14),
+    input(b) {
+      if (b === 'left' && pad > 0) pad--;
+      else if (b === 'right' && pad < W - 3) pad++;
+      else if ((b === 'rot' || b === 'up') && stuck) { stuck = false; sfx.rot(); acc = 0; }
+      if (stuck) bx = pad + 1;
+    },
+    tick() {
+      if (stuck) return;
+      if (bx + dx < 0 || bx + dx >= W) dx = -dx;
+      if (by + dy < 0) dy = -dy;
+      const x = bx + dx, y = by + dy;
+      if (y >= 0 && br[y][x]) { breakAt(x, y); return; }
+      if (y >= 0 && br[y][bx]) { breakAt(bx, y); return; }
+      if (dy > 0 && y === H - 1) {
+        if (x >= pad && x <= pad + 2) {
+          dy = -1; if (x === pad) dx = -1; else if (x === pad + 2) dx = 1;
+          sfx.drop(); return;
+        }
+        if (x === pad - 1 && dx > 0) { dx = -1; dy = -1; sfx.drop(); return; }
+        if (x === pad + 3 && dx < 0) { dx = 1; dy = -1; sfx.drop(); return; }
+      }
+      bx = x; by = y;
+      if (by >= H - 1) {
+        lives--;
+        if (lives <= 0) die(); else { sfx.lose(); reset(); }
+      }
+    },
+    draw() {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (br[y][x]) px(x, y);
+      for (let i = 0; i < 3; i++) px(pad + i, H - 1);
+      px(bx, by);
+    },
+    drawNext() { for (let i = 0; i < lives; i++) nx(i, 1); },
+  };
+}
+
+// ---------- menu ----------
+const FONT = {
+  A: ['.XXX.', 'X...X', 'X...X', 'XXXXX', 'X...X', 'X...X', 'X...X'],
+  B: ['XXXX.', 'X...X', 'X...X', 'XXXX.', 'X...X', 'X...X', 'XXXX.'],
+  C: ['.XXX.', 'X...X', 'X....', 'X....', 'X....', 'X...X', '.XXX.'],
+  D: ['XXXX.', 'X...X', 'X...X', 'X...X', 'X...X', 'X...X', 'XXXX.'],
+};
+const GAMES = [
+  { id: 'tetris', letter: 'A', name: 'TETRIS', make: Tetris,
+    icon: ['..........', '....X.....', '...XXX....', '..........', '..........', 'X.......XX', 'XX..X..XXX', 'XXX.XXXXXX', 'XXXXXXX.XX', 'XXXXXXXXXX'] },
+  { id: 'snake', letter: 'B', name: 'SNAKE', make: Snake,
+    icon: ['..........', '......X...', '..........', '..........', '.XXXXX....', '.X........', '.X...XXX..', '.XXXXX.X..', '.......X..', '..........'] },
+  { id: 'racing', letter: 'C', name: 'RACING', make: Racing,
+    icon: ['X........X', 'X...X.X..X', '.....X....', 'X...XXX..X', 'X....X...X', '..........', 'X.X......X', 'X.XXX....X', '...X......', 'X.X.X....X'] },
+  { id: 'breakout', letter: 'D', name: 'BREAKOUT', make: Breakout,
+    icon: ['XXXXXXXXXX', 'XXXXXXXXXX', 'XX.XXX.XXX', '..........', '......X...', '..........', '..........', '..........', '..........', '...XXX....'] },
+];
+if (!(sel >= 0 && sel < GAMES.length)) sel = 0;
+for (const g of GAMES) hiScores[g.id] = store.get('bg-hi-' + g.id, 0);
+
+function drawMenu() {
+  const g = GAMES[sel];
+  blit(FONT[g.letter], 2, 1);
+  blit(g.icon, 0, 10);
+}
+
+// ---------- flow ----------
+function saveHi() {
+  const id = GAMES[sel].id;
+  if (score > hiScores[id]) { hiScores[id] = score; store.set('bg-hi-' + id, score); }
+}
+function startGame() {
+  level = startLevel; score = 0; acc = 0;
+  state = 'play';
+  game = GAMES[sel].make();
+  sfx.start(); wake();
+}
+function die() {
+  if (state !== 'play') return;
+  state = 'dying'; animT = 0;
+  saveHi(); sfx.over();
+  try { navigator.vibrate && navigator.vibrate(200); } catch (e) {}
+}
+function toMenu() { if (state === 'play' || state === 'pause') saveHi(); state = 'menu'; }
+
+function press(b) {
+  ensureAudio();
+  if (b === 'sound') { sound = !sound; store.set('bg-sound', sound); sfx.sel(); return; }
+  if (b === 'reset') { toMenu(); sfx.sel(); return; }
+  if (state === 'menu') {
+    if (b === 'left' || b === 'right') { sel = (sel + (b === 'left' ? GAMES.length - 1 : 1)) % GAMES.length; store.set('bg-sel', sel); sfx.sel(); }
+    else if (b === 'up' || b === 'down') { startLevel = Math.max(1, Math.min(9, startLevel + (b === 'up' ? 1 : -1))); store.set('bg-level', startLevel); sfx.sel(); }
+    else if (b === 'rot' || b === 'start') startGame();
+    return;
+  }
+  if (state === 'dying') return;
+  if (b === 'start') { state = state === 'pause' ? 'play' : 'pause'; if (state === 'play') wake(); sfx.sel(); return; }
+  if (state === 'pause') { if (b === 'rot') { state = 'play'; wake(); } return; }
+  game.input(b);
+}
+
+// ---------- input ----------
+const REPEAT = new Set(['left', 'right', 'down']);
+const timers = {};
+function holdStart(b) {
+  if (held.has(b)) return;
+  held.add(b); press(b);
+  if (REPEAT.has(b)) {
+    const rep = () => { if (!held.has(b) || state !== 'play') return; press(b); timers[b] = setTimeout(rep, 55); };
+    timers[b] = setTimeout(rep, 180);
+  }
+}
+function holdEnd(b) { held.delete(b); clearTimeout(timers[b]); }
+
+document.querySelectorAll('button[data-b]').forEach(el => {
+  const b = el.dataset.b;
+  el.addEventListener('pointerdown', e => { e.preventDefault(); el.classList.add('pressed'); holdStart(b); });
+  const end = () => { el.classList.remove('pressed'); holdEnd(b); };
+  el.addEventListener('pointerup', end);
+  el.addEventListener('pointercancel', end);
+  el.addEventListener('pointerleave', end);
+});
+document.addEventListener('contextmenu', e => e.preventDefault());
+
+const KEYS = {
+  ArrowLeft: 'left', a: 'left', ArrowRight: 'right', d: 'right',
+  ArrowUp: 'up', w: 'up', ArrowDown: 'down', s: 'down',
+  ' ': 'rot', x: 'rot', k: 'rot', Enter: 'start', p: 'start',
+  m: 'sound', Escape: 'reset', r: 'reset',
+};
+document.addEventListener('keydown', e => {
+  const b = KEYS[e.key] || KEYS[e.key.toLowerCase()];
+  if (!b) return;
+  e.preventDefault();
+  if (!e.repeat) holdStart(b);
+});
+document.addEventListener('keyup', e => {
+  const b = KEYS[e.key] || KEYS[e.key.toLowerCase()];
+  if (b) holdEnd(b);
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) {
+    if (state === 'play') state = 'pause';
+    for (const b of [...held]) holdEnd(b);
+  }
+});
+
+// keep the screen on while playing (where supported)
+let wl = null;
+async function wake() {
+  try {
+    if ('wakeLock' in navigator && !wl) {
+      wl = await navigator.wakeLock.request('screen');
+      wl.addEventListener('release', () => { wl = null; });
+    }
+  } catch (e) {}
+}
+
+// ---------- loop ----------
+const STEP = 35;
+const els = { score: $('score'), hi: $('hi'), level: $('level'), gname: $('gname'), nextLbl: $('nextLbl'), pause: $('pauseIco'), snd: $('sndIco'), hint: $('hint') };
+
+function render() {
+  clearG(B); clearG(N);
+  if (state === 'menu') drawMenu();
+  else { game.draw(); game.drawNext(); }
+  if (state === 'dying') {
+    const s = Math.floor(animT / STEP);
+    if (s < H) { for (let y = H - 1 - s; y < H; y++) B[y].fill(1); }
+    else { const c = s - H; for (let y = 0; y < H; y++) B[y].fill(y < c ? 0 : 1); }
+  }
+  flush();
+
+  const g = GAMES[sel];
+  setText(els.score, String(score));
+  setText(els.hi, String(Math.max(hiScores[g.id], state === 'menu' ? 0 : score)));
+  setText(els.level, String(state === 'menu' ? startLevel : level));
+  setText(els.gname, 'GAME ' + g.letter + '\n' + g.name);
+  setText(els.nextLbl, state === 'menu' ? '' : game.label);
+  els.pause.classList.toggle('dim', !(state === 'pause' && blinkOn()));
+  els.snd.classList.toggle('dim', !sound);
+  setText(els.hint,
+    state === 'menu'  ? '◀ ▶ เลือกเกม · ▲ ▼ ปรับเลเวล · ⟳ หรือ START เพื่อเริ่ม' :
+    state === 'pause' ? 'หยุดชั่วคราว — กด START หรือ ⟳ เพื่อเล่นต่อ' :
+    state === 'dying' ? 'GAME OVER' : game.hint);
+}
+
+let last = performance.now();
+function frame(t) {
+  const dt = Math.min(100, t - last); last = t; now += dt;
+  if (state === 'play') {
+    acc += dt;
+    let iv = game.interval();
+    while (acc >= iv && state === 'play') { acc -= iv; game.tick(); iv = game.interval(); }
+  } else if (state === 'dying') {
+    animT += dt;
+    if (animT >= STEP * H * 2) state = 'menu';
+  }
+  render();
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+</script>
+</body>
+</html>
