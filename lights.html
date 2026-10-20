@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>Lights Out</title>
+<meta name="theme-color" content="#1b1d22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root { --ink: #1f2420; --label: #3c4a6b; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: #1b1d22; font-family: system-ui, -apple-system, "Segoe UI", "Leelawadee UI", Tahoma, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  body { display: flex; justify-content: center; min-height: 100vh; min-height: 100dvh; }
+  .dev {
+    width: min(100vw, 480px); min-height: 100%;
+    background: linear-gradient(170deg, #eee8d6, #d2c7a8);
+    padding: max(14px, env(safe-area-inset-top)) 16px max(18px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; }
+  .back { font-size: 13px; font-weight: 700; color: var(--label); text-decoration: none; border: 1.5px solid currentColor; border-radius: 999px; padding: 5px 12px; }
+  h1 { margin: 0; font-size: 17px; letter-spacing: .14em; color: #222; }
+  .lcd {
+    background: radial-gradient(ellipse at 30% 20%, #d3d8bf, #bfc5a8 70%);
+    border: 10px solid #2c3e6e; border-radius: 10px;
+    padding: 14px; box-shadow: inset 0 2px 8px rgba(0,0,0,.35);
+  }
+  .stats { display: flex; justify-content: space-between; font-family: "Courier New", monospace; font-weight: 700; color: var(--ink); font-size: 16px; margin-bottom: 14px; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; width: min(100%, 60vh); margin: 0 auto; }
+  .cell {
+    aspect-ratio: 1; border: 0; border-radius: 50%; cursor: pointer; touch-action: none;
+    background: rgba(31,36,32,.08);
+    transition: background .12s, transform .12s;
+  }
+  .cell.on { background: var(--ink); box-shadow: inset 0 -4px 0 rgba(255,255,255,.08); }
+  .cell.hint { outline: 3px dashed #c41d2b; outline-offset: 3px; }
+  .cell:active { transform: scale(.92); }
+  .won .cell { animation: blink .5s 3; }
+  @keyframes blink { 50% { background: var(--ink); } }
+  .msg { min-height: 1.5em; margin-top: 14px; text-align: center; font-weight: 700; color: var(--ink); }
+  .btns { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .pill { height: 38px; padding: 0 16px; border: 0; border-radius: 999px; background: #5b6f9c; color: #fff; font: inherit; font-size: 13px; font-weight: 800; box-shadow: 0 3px 0 #33415f; cursor: pointer; }
+  .pill.go { background: #2f8f5b; box-shadow: 0 3px 0 #1c5a39; }
+  .pill:active { transform: translateY(3px); box-shadow: none; }
+  .pill[hidden] { display: none; }
+  .help { color: var(--label); font-size: 13px; text-align: center; line-height: 1.45; margin: 0; }
+</style>
+</head>
+<body>
+<div class="dev">
+  <div class="top"><a class="back" href="index.html">☰ เมนู</a><h1>LIGHTS OUT</h1><span style="width:64px"></span></div>
+
+  <div class="lcd" id="lcd">
+    <div class="stats"><span id="lv">LEVEL 1</span><span id="mv">MOVES 0</span></div>
+    <div class="grid" id="grid"></div>
+    <div class="msg" id="msg"></div>
+  </div>
+
+  <div class="btns">
+    <button class="pill go" id="next" hidden>ด่านต่อไป ▶</button>
+    <button class="pill" id="hint">💡 ใบ้</button>
+    <button class="pill" id="restart">↺ เริ่มด่านใหม่</button>
+    <button class="pill" id="skip">ข้ามด่าน</button>
+  </div>
+
+  <p class="help">แตะช่องไหน ช่องนั้นและช่องบน-ล่าง-ซ้าย-ขวาจะสลับเปิด/ปิด<br>ปิดไฟให้หมดทั้งกระดานเพื่อผ่านด่าน</p>
+</div>
+<script>
+'use strict';
+const N = 5;
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const $ = id => document.getElementById(id);
+let level = store.get('lo-level', 1);
+let board, sol, start, startSol, moves = 0, won = false;
+
+const cells = [];
+for (let i = 0; i < N * N; i++) {
+  const b = document.createElement('button');
+  b.className = 'cell'; b.setAttribute('aria-label', 'ช่อง ' + (i + 1));
+  b.addEventListener('pointerdown', e => { e.preventDefault(); press(i); });
+  $('grid').appendChild(b); cells.push(b);
+}
+
+function toggle(b, i) {
+  const x = i % N, y = Math.floor(i / N);
+  for (const [dx, dy] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) {
+    const nx = x + dx, ny = y + dy;
+    if (nx >= 0 && nx < N && ny >= 0 && ny < N) b[ny * N + nx] ^= 1;
+  }
+}
+
+// Build the puzzle by pressing random cells on a dark board, so it is always solvable.
+// Presses commute and cancel in pairs, so `sol` (XOR of all presses) is always a solution.
+function newLevel() {
+  do {
+    board = new Array(N * N).fill(0); sol = new Array(N * N).fill(0);
+    const presses = Math.min(3 + level, 14);
+    for (let k = 0; k < presses; k++) { const i = Math.floor(Math.random() * N * N); toggle(board, i); sol[i] ^= 1; }
+  } while (board.every(v => !v));
+  start = board.slice(); startSol = sol.slice();
+  begin();
+}
+function begin() {
+  moves = 0; won = false;
+  $('msg').textContent = ''; $('next').hidden = true; $('lcd').classList.remove('won');
+  render();
+}
+function press(i) {
+  if (won) return;
+  toggle(board, i); sol[i] ^= 1; moves++;
+  try { navigator.vibrate && navigator.vibrate(8); } catch (e) {}
+  if (board.every(v => !v)) {
+    won = true; level++; store.set('lo-level', level);
+    $('msg').textContent = `ผ่านด่าน! ใช้ ${moves} ครั้ง 🎉`;
+    $('next').hidden = false; $('lcd').classList.add('won');
+  }
+  render();
+}
+function render() {
+  cells.forEach((c, i) => { c.classList.toggle('on', !!board[i]); c.classList.remove('hint'); });
+  $('lv').textContent = 'LEVEL ' + (won ? level - 1 : level);
+  $('mv').textContent = 'MOVES ' + moves;
+}
+
+$('next').onclick = newLevel;
+$('restart').onclick = () => { if (won) return; board = start.slice(); sol = startSol.slice(); begin(); };
+$('skip').onclick = () => { if (!won) { level++; store.set('lo-level', level); } newLevel(); };
+$('hint').onclick = () => {
+  if (won) return;
+  const i = sol.findIndex(v => v);
+  if (i >= 0) cells[i].classList.add('hint');
+};
+
+newLevel();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>

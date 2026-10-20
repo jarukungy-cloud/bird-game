@@ -1,6 +1,10 @@
 // Cache-first service worker so the game runs with no signal once installed.
-const CACHE = 'retro-games-v1';
-const FILES = ['./', './index.html', './brick.html', './manifest.webmanifest', './icon.svg'];
+// Bump the version whenever any file changes, so phones fetch the new copies.
+const CACHE = 'retro-games-v3';
+const FILES = [
+  './', './index.html', './bird.html', './brick.html', './lights.html', './2048.html', './words.html', './race.html',
+  './manifest.webmanifest', './icon.svg',
+];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(FILES)).then(() => self.skipWaiting()));

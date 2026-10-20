@@ -1,0 +1,279 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>หาคำ</title>
+<meta name="theme-color" content="#1b1d22">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<style>
+  :root { --ink: #1f2420; --label: #3c4a6b; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; background: #1b1d22; font-family: system-ui, -apple-system, "Segoe UI", "Leelawadee UI", "Noto Sans Thai", Tahoma, sans-serif; user-select: none; -webkit-user-select: none; touch-action: manipulation; }
+  body { display: flex; justify-content: center; min-height: 100vh; min-height: 100dvh; }
+  .dev {
+    width: min(100vw, 520px); min-height: 100%;
+    background: linear-gradient(170deg, #eee8d6, #d2c7a8);
+    padding: max(14px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .back { font-size: 13px; font-weight: 700; color: var(--label); text-decoration: none; border: 1.5px solid currentColor; border-radius: 999px; padding: 5px 12px; white-space: nowrap; }
+  h1 { margin: 0; font-size: 18px; color: #222; }
+  .count { font-family: "Courier New", monospace; font-weight: 800; color: var(--label); font-size: 15px; }
+
+  .opts { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .seg { display: inline-flex; background: #d8cfb3; border-radius: 999px; padding: 3px; }
+  .seg button { border: 0; background: transparent; font: inherit; font-size: 13px; font-weight: 700; color: #555; padding: 6px 12px; border-radius: 999px; cursor: pointer; }
+  .seg button.on { background: #2c3e6e; color: #fff; }
+  select { font: inherit; font-size: 13px; font-weight: 700; color: #222; background: #f7f3e8; border: 1.5px solid #b9ae90; border-radius: 999px; padding: 6px 10px; }
+
+  .lcd {
+    background: radial-gradient(ellipse at 30% 20%, #e4e7d6, #d0d5bd 70%);
+    border: 8px solid #2c3e6e; border-radius: 10px; padding: 6px;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,.25);
+    touch-action: none;
+  }
+  .grid { display: grid; gap: 2px; width: min(100%, 64vh); margin: 0 auto; }
+  .c {
+    aspect-ratio: 1; display: grid; place-items: center; border-radius: 6px;
+    color: var(--ink); font-weight: 700; line-height: 1;
+    transition: background .1s;
+  }
+  .c.sel { background: #2c3e6e !important; color: #fff; }
+  .c.start { box-shadow: inset 0 0 0 2.5px #2c3e6e; }
+  .shake { animation: shake .25s; }
+  @keyframes shake { 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+
+  .words { display: flex; flex-wrap: wrap; gap: 6px 8px; justify-content: center; }
+  .w { font-size: 15px; font-weight: 700; color: #333; background: #f7f3e8; border-radius: 999px; padding: 4px 12px; box-shadow: 0 2px 0 #c9bf9f; }
+  .w.found { text-decoration: line-through; text-decoration-thickness: 2px; color: #555; box-shadow: none; }
+  .done { text-align: center; font-weight: 800; color: #2f7a4d; font-size: 16px; min-height: 1.4em; }
+  .btns { display: flex; justify-content: center; }
+  .pill { height: 38px; padding: 0 18px; border: 0; border-radius: 999px; background: #2f8f5b; color: #fff; font: inherit; font-size: 14px; font-weight: 800; box-shadow: 0 3px 0 #1c5a39; cursor: pointer; }
+  .pill:active { transform: translateY(3px); box-shadow: none; }
+  .help { color: var(--label); font-size: 12.5px; text-align: center; line-height: 1.45; margin: 0; }
+</style>
+</head>
+<body>
+<div class="dev">
+  <div class="top"><a class="back" href="index.html">☰ เมนู</a><h1>🔤 หาคำ</h1><span class="count" id="count">0/0</span></div>
+
+  <div class="opts">
+    <div class="seg" id="lang"><button data-v="th">ไทย</button><button data-v="en">English</button></div>
+    <select id="cat" aria-label="หมวด"></select>
+    <select id="diff" aria-label="ความยาก">
+      <option value="easy">ง่าย →↓</option>
+      <option value="normal">ปกติ + เฉียง</option>
+      <option value="hard">ยาก + ถอยหลัง</option>
+    </select>
+  </div>
+
+  <div class="lcd"><div class="grid" id="grid"></div></div>
+
+  <div class="words" id="words"></div>
+  <div class="done" id="done"></div>
+  <div class="btns"><button class="pill" id="new">🔄 เกมใหม่</button></div>
+  <p class="help">ลากนิ้วจากตัวแรกถึงตัวสุดท้ายของคำ (หรือแตะตัวแรก แล้วแตะตัวสุดท้าย)</p>
+</div>
+<script>
+'use strict';
+const store = {
+  get(k, d) { try { const v = localStorage.getItem(k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+const $ = id => document.getElementById(id);
+
+const WORDS = {
+  th: {
+    'สัตว์': ['แมว', 'ช้าง', 'ม้า', 'กระต่าย', 'จระเข้', 'ยีราฟ', 'นกฮูก', 'ปลาวาฬ', 'เต่า', 'ลิง', 'หมี', 'ไก่', 'เป็ด', 'ควาย', 'กวาง', 'สิงโต', 'เสือ', 'ผีเสื้อ', 'หมาป่า', 'นกแก้ว'],
+    'ผลไม้': ['มะม่วง', 'ทุเรียน', 'มังคุด', 'เงาะ', 'ลำไย', 'ส้ม', 'กล้วย', 'สับปะรด', 'แตงโม', 'ฝรั่ง', 'ลิ้นจี่', 'มะพร้าว', 'องุ่น', 'ชมพู่', 'ขนุน', 'มะละกอ', 'ละมุด', 'ส้มโอ'],
+    'อาหาร': ['ผัดไทย', 'ต้มยำ', 'ส้มตำ', 'ข้าวมันไก่', 'ก๋วยเตี๋ยว', 'ข้าวเหนียว', 'ไข่เจียว', 'หมูกระทะ', 'ขนมจีน', 'โจ๊ก', 'ลาบ', 'น้ำพริก', 'ข้าวผัด', 'แกงส้ม', 'ไก่ทอด', 'สุกี้'],
+    'ท่องเที่ยว': ['เครื่องบิน', 'สนามบิน', 'ตั๋ว', 'กระเป๋า', 'ทะเล', 'ภูเขา', 'โรงแรม', 'แผนที่', 'กล้อง', 'ทัวร์', 'วันหยุด', 'เกาะ', 'รถไฟ', 'ชายหาด', 'ที่นั่ง', 'นักบิน', 'วีซ่า', 'ของฝาก'],
+    'สี': ['แดง', 'เขียว', 'เหลือง', 'ฟ้า', 'ชมพู', 'ม่วง', 'ส้ม', 'ขาว', 'ดำ', 'เทา', 'น้ำตาล', 'ทอง', 'เงิน', 'คราม', 'บานเย็น'],
+  },
+  en: {
+    'Animals': ['CAT', 'DOG', 'LION', 'TIGER', 'ZEBRA', 'PANDA', 'EAGLE', 'WHALE', 'SHARK', 'RABBIT', 'MONKEY', 'TURTLE', 'PARROT', 'GIRAFFE', 'DOLPHIN', 'HORSE', 'OWL', 'KOALA', 'FROG', 'BEAR'],
+    'Fruits': ['APPLE', 'MANGO', 'BANANA', 'ORANGE', 'GRAPE', 'LEMON', 'PEACH', 'PEAR', 'CHERRY', 'KIWI', 'PAPAYA', 'COCONUT', 'MELON', 'LIME', 'GUAVA', 'PLUM', 'DURIAN'],
+    'Travel': ['PLANE', 'AIRPORT', 'TICKET', 'PASSPORT', 'HOTEL', 'BEACH', 'ISLAND', 'CLOUD', 'SEAT', 'PILOT', 'LUGGAGE', 'MAP', 'TRAIN', 'CAMERA', 'VISA', 'GATE', 'WINDOW', 'TRIP'],
+    'Colors': ['RED', 'BLUE', 'GREEN', 'YELLOW', 'PURPLE', 'ORANGE', 'PINK', 'BLACK', 'WHITE', 'BROWN', 'GRAY', 'GOLD', 'SILVER', 'NAVY', 'CYAN'],
+    'Food': ['PIZZA', 'BREAD', 'RICE', 'NOODLE', 'SOUP', 'SALAD', 'CHEESE', 'BURGER', 'PASTA', 'SUSHI', 'STEAK', 'CAKE', 'COOKIE', 'HONEY', 'TACO'],
+  },
+};
+const COLORS = ['#f6c2c2', '#c4def3', '#c9eac6', '#f8dfa8', '#ddcdf4', '#f6cbe2', '#bfe9e2', '#e8e3a8', '#d3d3f6', '#f4d1bd'];
+const DIRS = {
+  easy:   [[1, 0], [0, 1]],
+  normal: [[1, 0], [0, 1], [1, 1], [1, -1]],
+  hard:   [[1, 0], [0, 1], [1, 1], [1, -1], [-1, 0], [0, -1], [-1, -1], [-1, 1]],
+};
+
+// Thai tone marks and above/below vowels sit on the previous letter, so they share its cell.
+const MARK = /[ัิ-ฺ็-๎]/;
+function toks(w) {
+  const out = [];
+  for (const ch of w) { if (MARK.test(ch) && out.length) out[out.length - 1] += ch; else out.push(ch); }
+  return out;
+}
+
+let lang = store.get('ws-lang', 'th');
+let diff = store.get('ws-diff', 'normal');
+let cat = store.get('ws-cat-' + lang, null);
+let S, grid, placed, cellEls = [];
+
+const shuffle = a => { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; };
+
+function setupOptions() {
+  document.querySelectorAll('#lang button').forEach(b => b.classList.toggle('on', b.dataset.v === lang));
+  const cats = Object.keys(WORDS[lang]);
+  if (!cats.includes(cat)) cat = cats[0];
+  $('cat').innerHTML = '';
+  for (const c of cats) { const o = document.createElement('option'); o.value = o.textContent = c; $('cat').appendChild(o); }
+  $('cat').value = cat;
+  $('diff').value = diff;
+}
+
+function generate() {
+  S = lang === 'th' ? 8 : 10;
+  const want = lang === 'th' ? 7 : 9;
+  const dirs = DIRS[diff];
+  const pool = shuffle(WORDS[lang][cat].map(w => ({ w, t: toks(w) })).filter(o => o.t.length >= 2 && o.t.length <= S));
+  grid = new Array(S * S).fill(null);
+  placed = [];
+  // longest words first so they get room
+  const pick = pool.slice(0, want + 4).sort((a, b) => b.t.length - a.t.length);
+  for (const o of pick) {
+    if (placed.length >= want) break;
+    for (let tries = 0; tries < 300; tries++) {
+      const [dx, dy] = dirs[Math.floor(Math.random() * dirs.length)];
+      const x0 = Math.floor(Math.random() * S), y0 = Math.floor(Math.random() * S);
+      const cells = [];
+      let ok = true;
+      for (let k = 0; k < o.t.length; k++) {
+        const x = x0 + dx * k, y = y0 + dy * k;
+        if (x < 0 || x >= S || y < 0 || y >= S) { ok = false; break; }
+        const i = y * S + x;
+        if (grid[i] !== null && grid[i] !== o.t[k]) { ok = false; break; }
+        cells.push(i);
+      }
+      if (!ok) continue;
+      cells.forEach((i, k) => { grid[i] = o.t[k]; });
+      placed.push({ ...o, cells, found: false, color: null });
+      break;
+    }
+  }
+  // filler: letters from this category's words (Thai) or mixed alphabet (English)
+  const letters = lang === 'th'
+    ? WORDS.th[cat].flatMap(toks).filter(t => t.length === 1 || !/^[เแโใไ]/.test(t))
+    : (WORDS.en[cat].join('') + 'ABCDEFGHIJKLMNOPQRSTUVWXYZ').split('');
+  for (let i = 0; i < grid.length; i++) if (grid[i] === null) grid[i] = letters[Math.floor(Math.random() * letters.length)];
+  placed.sort((a, b) => a.w.localeCompare(b.w, lang));
+  pending = null;
+  render();
+}
+
+function render() {
+  const g = $('grid');
+  g.innerHTML = '';
+  g.style.gridTemplateColumns = `repeat(${S}, 1fr)`;
+  const fs = lang === 'th' ? `min(${46 / S}vw, ${26 / S * 8}px)` : `min(${52 / S}vw, ${26}px)`;
+  cellEls = grid.map((t, i) => {
+    const d = document.createElement('div');
+    d.className = 'c'; d.dataset.i = i; d.textContent = t; d.style.fontSize = fs;
+    g.appendChild(d); return d;
+  });
+  paint();
+  const ws = $('words'); ws.innerHTML = '';
+  for (const p of placed) {
+    const s = document.createElement('span');
+    s.className = 'w' + (p.found ? ' found' : ''); s.textContent = p.w;
+    if (p.found) s.style.background = p.color;
+    ws.appendChild(s);
+  }
+  const n = placed.filter(p => p.found).length;
+  $('count').textContent = `${n}/${placed.length}`;
+  $('done').textContent = n === placed.length && n ? (lang === 'th' ? 'เก่งมาก! หาครบทุกคำแล้ว 🎉' : 'Great job! All words found 🎉') : '';
+}
+function paint(sel = []) {
+  cellEls.forEach(c => { c.style.background = ''; c.classList.remove('sel', 'start'); });
+  for (const p of placed) if (p.found) for (const i of p.cells) cellEls[i].style.background = p.color;
+  for (const i of sel) cellEls[i].classList.add('sel');
+  if (pending !== null && !sel.length) cellEls[pending].classList.add('start');
+}
+
+// ---- selection: drag, or tap start then tap end ----
+let start = null, cur = null, dragging = false, pending = null;
+function cellAt(e) {
+  const el = document.elementFromPoint(e.clientX, e.clientY);
+  const c = el && el.closest && el.closest('.c');
+  return c ? +c.dataset.i : null;
+}
+function lineCells(a, b) {
+  const ax = a % S, ay = Math.floor(a / S), dx = b % S - ax, dy = Math.floor(b / S) - ay;
+  if (!dx && !dy) return [a];
+  const k = Math.round(Math.atan2(dy, dx) / (Math.PI / 4));
+  const sx = Math.round(Math.cos(k * Math.PI / 4)), sy = Math.round(Math.sin(k * Math.PI / 4));
+  const len = Math.max(Math.abs(dx), Math.abs(dy)), out = [];
+  for (let n = 0; n <= len; n++) {
+    const x = ax + sx * n, y = ay + sy * n;
+    if (x < 0 || x >= S || y < 0 || y >= S) break;
+    out.push(y * S + x);
+  }
+  return out;
+}
+function finish(a, b) {
+  const cells = lineCells(a, b);
+  const str = cells.map(i => grid[i]).join('');
+  const rev = cells.slice().reverse().map(i => grid[i]).join('');
+  const hit = placed.find(p => !p.found && p.t.length === cells.length && (p.t.join('') === str || p.t.join('') === rev));
+  if (hit) {
+    hit.found = true; hit.cells = cells;
+    hit.color = COLORS[placed.filter(p => p.found).length % COLORS.length];
+    try { navigator.vibrate && navigator.vibrate(15); } catch (e) {}
+    render();
+  } else {
+    paint();
+    if (cells.length > 1) { const g = $('grid'); g.classList.remove('shake'); void g.offsetWidth; g.classList.add('shake'); }
+  }
+}
+const gridEl = $('grid');
+gridEl.addEventListener('pointerdown', e => {
+  const c = cellAt(e); if (c === null) return;
+  e.preventDefault();
+  try { gridEl.setPointerCapture(e.pointerId); } catch (_) {}
+  if (pending !== null && pending !== c) { const p = pending; pending = null; finish(p, c); return; }
+  start = cur = c; dragging = true;
+  paint([c]);
+});
+gridEl.addEventListener('pointermove', e => {
+  if (!dragging) return;
+  const c = cellAt(e);
+  if (c !== null && c !== cur) { cur = c; paint(lineCells(start, cur)); }
+});
+gridEl.addEventListener('pointerup', () => {
+  if (!dragging) return;
+  dragging = false;
+  if (cur === start) { pending = pending === start ? null : start; paint(); }
+  else { pending = null; finish(start, cur); }
+});
+gridEl.addEventListener('pointercancel', () => { dragging = false; paint(); });
+
+// ---- options ----
+document.querySelectorAll('#lang button').forEach(b => b.onclick = () => {
+  if (lang === b.dataset.v) return;
+  lang = b.dataset.v; store.set('ws-lang', lang);
+  cat = store.get('ws-cat-' + lang, null);
+  setupOptions(); generate();
+});
+$('cat').onchange = () => { cat = $('cat').value; store.set('ws-cat-' + lang, cat); generate(); };
+$('diff').onchange = () => { diff = $('diff').value; store.set('ws-diff', diff); generate(); };
+$('new').onclick = generate;
+
+setupOptions();
+generate();
+
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(() => {});
+</script>
+</body>
+</html>
